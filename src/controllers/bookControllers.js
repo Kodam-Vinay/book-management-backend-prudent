@@ -71,7 +71,6 @@ const storeNewBook = async (req, res) => {
       PublishedDate,
       AuthorName,
       GenreName,
-      GenreDescription,
     };
 
     const missingFields = Object.entries(requiredFields)
@@ -96,7 +95,7 @@ const storeNewBook = async (req, res) => {
       const insertGenreQuery = `INSERT INTO Genres (Name, Description) VALUES (?, ?)`;
       const result = await db.run(insertGenreQuery, [
         GenreName,
-        GenreDescription,
+        findGenre ? findGenre?.GenreDescription : GenreDescription,
       ]);
       genreId = result.lastID; // Get the ID of the inserted genre
     } else {
@@ -142,7 +141,14 @@ const updateBook = async (req, res) => {
   try {
     const db = req.db;
     const bookId = req.params.id;
-    const { Title, Pages, PublishedDate, AuthorID, GenreID } = req.body;
+    const {
+      Title,
+      Pages,
+      PublishedDate,
+      AuthorName,
+      GenreName,
+      GenreDescription,
+    } = req.body;
 
     if (!bookId) {
       return res
@@ -151,13 +157,13 @@ const updateBook = async (req, res) => {
     }
 
     const checkAuthorExist = await db.get(
-      `SELECT AuthorID FROM Authors WHERE AuthorID= ?`,
-      [AuthorID]
+      `SELECT * FROM Authors WHERE Name= ?`,
+      [AuthorName]
     );
-    const checkGenreExist = await db.get(
-      `SELECT GenreID FROM Genres WHERE GenreID= ?`,
-      [GenreID]
-    );
+    const checkGenreExist = await db.get(`SELECT * FROM Genres WHERE Name= ?`, [
+      GenreName,
+    ]);
+
     if (!checkAuthorExist) {
       return res
         .status(400)
@@ -167,6 +173,29 @@ const updateBook = async (req, res) => {
       return res
         .status(400)
         .send({ status: false, message: "Genre not found" });
+    }
+
+    let genreId;
+    if (!checkGenreExist) {
+      const insertGenreQuery = `INSERT INTO Genres (Name, Description) VALUES (?, ?)`;
+      const result = await db.run(insertGenreQuery, [
+        GenreName,
+        checkGenreExist ? checkGenreExist?.GenreDescription : GenreDescription,
+      ]);
+      genreId = result.lastID; // Get the ID of the inserted genre
+    } else {
+      genreId = checkGenreExist.GenreID;
+    }
+
+    // checking author is already exists
+
+    let authorId;
+    if (!checkAuthorExist) {
+      const insertAuthorQuery = `INSERT INTO Authors (Name) VALUES(?)`;
+      const result = await db.run(insertAuthorQuery, [AuthorName]);
+      authorId = result.lastID;
+    } else {
+      authorId = checkAuthorExist.AuthorID;
     }
 
     const query = `UPDATE Books SET 
@@ -180,8 +209,8 @@ const updateBook = async (req, res) => {
       Title,
       Pages,
       PublishedDate,
-      AuthorID,
-      GenreID,
+      authorId,
+      genreId,
       bookId,
     ]);
     res.status(200).send({
